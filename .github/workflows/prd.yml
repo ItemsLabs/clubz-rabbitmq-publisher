@@ -1,0 +1,78 @@
+name: "[prd] K8S Rabbitmq Deploy"
+defaults:
+  run:
+    shell: bash
+
+env:
+  DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+  ENV: prd
+  NAMESPACE: prd-fanclash
+  REPO_NAME: laliga-matchfantasy-rabbitmq-publisher
+on:
+  push:
+    branches:
+      - prd
+  workflow_dispatch:
+
+jobs:
+  fanclash-rabbitmq-publisher:  # Create infrastructure for services on push to Main branch
+    name: laliga-matchfantasy-rabbitmq-publisher
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Install doctl 
+        uses: digitalocean/action-doctl@v2
+        with:
+            token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      - name: Log in to DO Container Registry 
+        run: doctl registry login --expiry-seconds 600
+
+      - name: Configure Kubectl for DOKS
+        run: doctl kubernetes cluster kubeconfig save prd-fanclash # Replace <your-cluster-name> with your cluster's name
+
+      - name: Build and Push Docker Image
+        run: |
+          REPO_NAME="${GITHUB_REPOSITORY##*/}"
+          SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
+          DOCKER_IMAGE="${REPO_NAME}:$SHORT_SHA"
+          docker build -t $DOCKER_IMAGE .
+          # Tagging
+          docker tag $DOCKER_IMAGE registry.digitalocean.com/gameon-ams3/$DOCKER_IMAGE
+          docker tag $DOCKER_IMAGE registry.digitalocean.com/gameon-ams3/laliga-matchfantasy-rabbitmq-publisher:prd
+          # Pushing
+          docker push registry.digitalocean.com/gameon-ams3/$DOCKER_IMAGE
+          docker push registry.digitalocean.com/gameon-ams3/laliga-matchfantasy-rabbitmq-publisher:prd
+
+      - name: Update Image Tag in K8S Deployment
+        run: |
+          SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
+          sed -i 's/TAG_PLACEHOLDER/'"$SHORT_SHA"'/g' $GITHUB_WORKSPACE/images/laliga-matchfantasy-rabbitmq-publisher/deployment_${{ env.ENV }}.yaml
+
+      - name: K8S Deploy - Deployment
+        run: kubectl apply -f images/${{ env.REPO_NAME }}/deployment_${{ env.ENV }}.yaml
+
+      - name: Check Deployment Health
+        if: success()
+        run: kubectl rollout status deployment/${{ env.REPO_NAME }} -n $NAMESPACE
+        timeout-minutes: 3
+
+      - name: Rollback Deployment
+        if: failure()
+        run: kubectl rollout undo deployment/${{ env.REPO_NAME }} -n $NAMESPACE
+        timeout-minutes: 3
+
+      - name: Slack Notification
+        if: always()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_CHANNEL: production-deployments
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_PRD_URL }}
+          SLACK_ICON_EMOJI: ':gameon:'
+          SLACK_USERNAME: GitHubAction
+          SLACK_COLOR: ${{ job.status }} # Sets the color of the Slack notification bar to red for failures
+          SLACK_TITLE: 'Prd Laliga Rabbitmq Publisher K8s deployment. Commit message: ${{ github.event.head_commit.message }}'
+          SLACK_FOOTER: Powered By GameOn DevOps team

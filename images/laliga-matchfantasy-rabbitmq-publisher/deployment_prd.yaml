@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: laliga-matchfantasy-rabbitmq-publisher
+  namespace: "prd-fanclash"
+  labels:
+    app: laliga-matchfantasy-rabbitmq-publisher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: laliga-matchfantasy-rabbitmq-publisher
+  template:
+    metadata:
+      annotations:
+        ad.datadoghq.com/exclude: "true"
+      labels:
+        app: laliga-matchfantasy-rabbitmq-publisher
+    spec:
+      containers:
+      - name: laliga-matchfantasy-rabbitmq-publisher
+        image: registry.digitalocean.com/gameon-ams3/laliga-matchfantasy-rabbitmq-publisher:TAG_PLACEHOLDER
+        # This setting makes nodes pull the docker image every time before starting the pod. This is useful when debugging, 
+        # but should be turned off in production.
+        imagePullPolicy: IfNotPresent
+        envFrom:
+          - configMapRef:
+              name: fanclash-config
+          - configMapRef:
+              name: rmq-config
+          - secretRef:
+              name: db-creds
+          - secretRef:
+              name: rmq-creds
+        env:
+          - name: RMQ_EXCHANGES
+            value: "match_event,fcm,games,system,game_updates"
+        resources:
+          requests:
+            cpu: 10m

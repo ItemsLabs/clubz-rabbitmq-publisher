@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ufl-rabbitmq-publisher
+  namespace: NAMESPACE
+  labels:
+    app: ufl-rabbitmq-publisher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ufl-rabbitmq-publisher
+  template:
+    metadata:
+      labels:
+        app: ufl-rabbitmq-publisher
+    spec:
+      containers:
+      - name: ufl-rabbitmq-publisher
+        image: gcr.io/PROJECT_ID/ufl-rabbitmq-publisher:BUILD_VERSION
+        # This setting makes nodes pull the docker image every time before
+        # starting the pod. This is useful when debugging, but should be turned
+        # off in production.
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: DATABASE_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: fanclash-config
+                key: DATABASE_NAME
+          - name: DATABASE_USER
+            valueFrom:
+              secretKeyRef:
+                name: cloudsql
+                key: username
+          - name: DATABASE_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: cloudsql
+                key: password
+          - name: DATABASE_HOST
+            value: "CLOUD_SQL_HOST"
+          - name: RMQ_HOST
+            value: rabbitmq-NAMESPACE
+          - name: RMQ_PORT
+            value: "5672"
+          - name: RMQ_VHOST
+            value: "ufl"
+          - name: RMQ_USER
+            value: "user"
+          - name: RMQ_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: rabbitmq-NAMESPACE
+                key: rabbitmq-password
+          - name: RMQ_EXCHANGES
+            value: "match_event,fcm,games,system,game_updates"
+        resources:
+          requests:
+            cpu: 10m

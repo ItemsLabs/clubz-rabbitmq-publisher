@@ -1,0 +1,1 @@
+# laliga-matchfantasy-rabbitmq-publisher

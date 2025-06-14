@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ufl-rabbitmq-publisher
+  #namespace: qa
+  labels:
+    app: ufl-rabbitmq-publisher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ufl-rabbitmq-publisher
+  template:
+    metadata:
+      labels:
+        app: ufl-rabbitmq-publisher
+    spec:
+      containers:
+      - name: ufl-rabbitmq-publisher
+        image: 736790963086.dkr.ecr.us-east-1.amazonaws.com/laliga-matchfantasy-rabbitmq-publisher:latest
+        # This setting makes nodes pull the docker image every time before starting the pod. This is useful when debugging,
+        # but should be turned off in production.
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: DATABASE_NAME
+            value: "fanclash"
+          - name: DATABASE_USER
+            valueFrom:
+              secretKeyRef:
+                name: db-creds
+                key: DATABASE_USER
+          - name: DATABASE_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: db-creds
+                key: DATABASE_PASSWORD
+          - name: DATABASE_HOST
+            valueFrom:
+              secretKeyRef:
+                name: db-creds
+                key: DATABASE_HOST
+          - name: RMQ_HOST
+            value: "rabbitmq-0.rabbitmq-headless.rabbitmq.svc.cluster.local"
+          - name: RMQ_PORT
+            value: "5672"
+          - name: RMQ_VHOST
+            value: "ufl"
+          - name: RMQ_USER
+            valueFrom:
+              secretKeyRef:
+                name: rabbitmq
+                key: RMQ_USER
+          - name: RMQ_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: rabbitmq
+                key: RMQ_PASSWORD
+          - name: RMQ_EXCHANGES
+            value: "match_event,fcm,games,system,game_updates"
+          - name: RMQ_FCM_EXCHANGE
+            value: "fcm"
+          - name: RMQ_FCM_PUSHER_QUEUE
+            value: "fcm:pusher"
+          - name: WORKER_COUNT
+            value: "20"
+          - name: PREFETCH_COUNT
+            value: "100"
+          - name: FCM_CREDENTIALS
+            valueFrom:
+              secretKeyRef:
+                name: fcm-creds
+                key: FCM_CREDENTIALS
+        resources:
+          requests:
+            cpu: 10m
