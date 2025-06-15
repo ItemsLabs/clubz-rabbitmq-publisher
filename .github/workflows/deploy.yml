@@ -43,4 +43,4 @@ jobs:
         kubectl rollout status deployment/clubz-rabbitmq-publisher -n clubz-dev
 
     - name: Verify deployment
-      run: kubectl get services -n clubz-dev 
+      run: kubectl get services -n clubz-dev
